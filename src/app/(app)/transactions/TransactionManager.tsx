@@ -1,23 +1,17 @@
 "use client";
-
-import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Pencil, Search, Trash2, X } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
 import { EmptyState } from "@/components/shared/EmptyState";
-import type { ClientExpense } from "@/lib/finance";
+import type { ClientExpense } from "@/types/type";
 import { categories, formatMoney, type Category } from "@/lib/money";
 import { QuickExpenseButton } from "../../../components/shared/QuickExpenseButton";
 import { MonthSwitcher } from "@/components/shared/MonthSwitcher";
-import { trpc } from "@/trpc/react";
+import { api } from "@/trpc/react";
+import handleTRPCError from "@/lib/handleTRPCError";
+import { expenseSchema } from "@/lib/schema";
+import { useStatusMessage } from "@/components/shared/StatusMessageRouter";
 
-type Draft = {
-    id?: string;
-    name: string;
-    amount: string;
-    category: Category;
-    occurredOn: string;
-    note: string;
-};
 
 export function TransactionManager({
     expenses,
@@ -27,112 +21,72 @@ export function TransactionManager({
     month: string;
 }) {
     const router = useRouter();
-    const utils = trpc.useUtils();
+    const pathname = usePathname();
+    const utils = api.useUtils();
+
+    const { showMessage } = useStatusMessage();
     const [query, setQuery] = useState("");
     const [category, setCategory] = useState("All");
-    const [draft, setDraft] = useState<Draft | null>(null);
+    const [selectedExpense, setSelectedExpense] = useState<{
+        name: string;
+        amount: string;
+        category: Category;
+        occurredOn: string;
+    } | null>(null);
+    const [selectedExpenseId, setSelectedExpenseId] = useState("");
     const [deleteId, setDeleteId] = useState<string | null>(null);
-    const [error, setError] = useState("");
 
-    const visible = useMemo(
-        () =>
-            expenses.filter(
-                (item) =>
-                    (category === "All" || item.category === category) &&
-                    item.name.toLowerCase().includes(query.trim().toLowerCase()),
-            ),
-        [expenses, category, query],
-    );
+    const visible = useMemo(() =>
+        expenses.filter((item) =>
+            (category === "All" || item.category === category) &&
+            item.name.toLowerCase().includes(query.trim().toLowerCase()),
+        ), [expenses, category, query]);
 
-    async function refreshMonth() {
-        await utils.finance.month.invalidate({ month });
-        router.refresh();
-    }
-
-    const createExpense = trpc.finance.createExpense.useMutation({
+    const createExpense = api.finance.createExpense.useMutation({
         onSuccess: async () => {
-            setDraft(null);
-            setError("");
-            await refreshMonth();
+            setSelectedExpense(null);
+            setSelectedExpenseId("");
         },
-        onError: (cause) => setError(cause.message),
-    });
-    const updateExpense = trpc.finance.updateExpense.useMutation({
-        onSuccess: async () => {
-            setDraft(null);
-            setError("");
-            await refreshMonth();
-        },
-        onError: (cause) => setError(cause.message),
-    });
-    const deleteExpense = trpc.finance.deleteExpense.useMutation({
-        onSuccess: async () => {
-            setDeleteId(null);
-            setError("");
-            await refreshMonth();
-        },
-        onError: (cause) => {
-            setDeleteId(null);
-            setError(cause.message);
-        },
-    });
 
-    useEffect(() => {
-        const hasOpenModal = Boolean(draft || deleteId);
+        onError: (error) => {
+            handleTRPCError({ error, router, pathname, showMessage })
+        },
 
-        if (!hasOpenModal) {
-            document.body.style.overflow = "";
-            return;
+        onSettled: async () => {
+            await utils.finance.month.invalidate({ month });
         }
+    });
 
-        document.body.style.overflow = "hidden";
+    const updateExpense = api.finance.updateExpense.useMutation({
+        onSuccess: async () => {
+            setSelectedExpense(null);
+            setSelectedExpenseId("");
+        },
 
-        return () => {
-            document.body.style.overflow = "";
-        };
-    }, [draft, deleteId]);
+        onError: (error) => {
+            handleTRPCError({ error, router, pathname, showMessage })
+        },
+
+        onSettled: async () => {
+            await utils.finance.month.invalidate({ month });
+        }
+    });
+
+    const deleteExpense = api.finance.deleteExpense.useMutation({
+        onSuccess: async () => {
+            setDeleteId(null);
+        },
+
+        onError: (error) => {
+            handleTRPCError({ error, router, pathname, showMessage })
+        },
+
+        onSettled: async () => {
+            await utils.finance.month.invalidate({ month });
+        }
+    });
 
     const pending = createExpense.isPending || updateExpense.isPending || deleteExpense.isPending;
-
-    function submit(event: React.FormEvent) {
-        event.preventDefault();
-
-        if (!draft) {
-            return;
-        }
-
-        if (!draft.name.trim()) {
-            setError("Expense name is required.");
-            return;
-        }
-
-        if (!Number(draft.amount) || Number(draft.amount) <= 0) {
-            setError("Amount must be greater than 0.");
-            return;
-        }
-
-        const payload = {
-            name: draft.name.trim(),
-            amount: Number(draft.amount),
-            category: draft.category,
-            occurredOn: draft.occurredOn,
-            note: draft.note.trim(),
-        };
-
-        if (draft.id) {
-            updateExpense.mutate({ ...payload, id: draft.id });
-        } else {
-            createExpense.mutate(payload);
-        }
-    }
-
-    function destroy() {
-        if (!deleteId) {
-            return;
-        }
-
-        deleteExpense.mutate({ id: deleteId });
-    }
 
     return (
         <>
@@ -165,7 +119,7 @@ export function TransactionManager({
                         />
                     </label>
                     <select
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 sm:w-44"
+                        className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 sm:w-44"
                         value={category}
                         onChange={(event) => setCategory(event.target.value)}
                     >
@@ -181,7 +135,7 @@ export function TransactionManager({
                         {visible.map((expense) => (
                             <article
                                 key={expense.id}
-                                className="flex items-center gap-3 py-3 sm:items-center"
+                                className="flex items-center gap-3 py-3"
                             >
                                 <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-sky-100 text-sm font-black text-sky-700">
                                     {expense.name.slice(0, 1).toUpperCase()}
@@ -197,7 +151,6 @@ export function TransactionManager({
                                             month: "short",
                                             year: "numeric",
                                         }).format(new Date(`${expense.occurredOn}T12:00:00`))}
-                                        {expense.note ? ` - ${expense.note}` : ""}
                                     </p>
                                 </div>
                                 <div className="flex items-center shrink-0 gap-1">
@@ -205,23 +158,22 @@ export function TransactionManager({
                                         {formatMoney(expense.amountCents)}
                                     </strong>
                                     <button
-                                        className="grid size-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                                        className="grid size-8 cursor-pointer place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                                         aria-label={`Edit ${expense.name}`}
-                                        onClick={() =>
-                                            setDraft({
-                                                id: expense.id,
+                                        onClick={() => {
+                                            setSelectedExpense({
                                                 name: expense.name,
                                                 amount: String(expense.amountCents / 100),
                                                 category: expense.category as Category,
                                                 occurredOn: expense.occurredOn,
-                                                note: expense.note ?? "",
                                             })
-                                        }
+                                            setSelectedExpenseId(expense.id);
+                                        }}
                                     >
                                         <Pencil className="size-4" />
                                     </button>
                                     <button
-                                        className="grid size-8 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50"
+                                        className="grid size-8 cursor-pointer place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50"
                                         aria-label={`Delete ${expense.name}`}
                                         onClick={() => setDeleteId(expense.id)}
                                     >
@@ -239,42 +191,50 @@ export function TransactionManager({
                 )}
             </section>
 
-            {draft && (
-                <div className="fixed inset-0 z-50 grid place-items-start overflow-y-auto bg-slate-950/40 p-4 backdrop-blur-sm sm:place-items-center">
+            {selectedExpense && (
+                <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-slate-950/40 p-4 backdrop-blur-sm">
                     <form
                         className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/20"
-                        onSubmit={submit}
+                        onSubmit={(event) => {
+                            event.preventDefault();
+
+                            const result = expenseSchema.safeParse(selectedExpense);
+
+                            if (!result.success) {
+                                showMessage(result.error.issues[0].message, false);
+                                return;
+                            }
+
+                            updateExpense.mutate({ ...result.data, id: selectedExpenseId })
+                        }}
                     >
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-xs font-black tracking-wider text-sky-700">TRANSACTION</p>
                                 <h2 className="mt-1 text-xl font-black tracking-tight text-slate-950">
-                                    {draft.id ? "Edit expense" : "Add expense"}
+                                    Edit expense
                                 </h2>
                             </div>
                             <button
                                 type="button"
-                                className="grid size-9 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50"
-                                onClick={() => setDraft(null)}
+                                className="grid size-9 cursor-pointer place-items-center rounded-lg text-rose-600 transition hover:bg-rose-50"
+                                onClick={() => {
+                                    setSelectedExpense(null)
+                                    setSelectedExpenseId("");
+                                }}
                                 aria-label="Close"
                             >
                                 <X className="size-4" />
                             </button>
                         </div>
 
-                        {error && (
-                            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                                {error}
-                            </div>
-                        )}
-
                         <label className="mt-4 block text-sm font-black text-slate-700">
                             Expense name
                             <input
                                 className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                                 maxLength={80}
-                                value={draft.name}
-                                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                                value={selectedExpense.name}
+                                onChange={(event) => setSelectedExpense({ ...selectedExpense, name: event.target.value })}
                                 autoFocus
                             />
                         </label>
@@ -285,21 +245,18 @@ export function TransactionManager({
                                 <input
                                     className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                                     type="number"
-                                    min="0.01"
-                                    step="0.01"
-                                    inputMode="decimal"
-                                    value={draft.amount}
-                                    onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
+                                    value={selectedExpense.amount}
+                                    onChange={(event) => setSelectedExpense({ ...selectedExpense, amount: event.target.value })}
                                 />
                             </label>
                             <label className="mt-4 block text-sm font-black text-slate-700">
                                 Category
                                 <select
                                     className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                                    value={draft.category}
+                                    value={selectedExpense.category}
                                     onChange={(event) =>
-                                        setDraft({
-                                            ...draft,
+                                        setSelectedExpense({
+                                            ...selectedExpense,
                                             category: event.target.value as Category,
                                         })
                                     }
@@ -316,31 +273,24 @@ export function TransactionManager({
                             <input
                                 className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                                 type="date"
-                                value={draft.occurredOn}
-                                onChange={(event) => setDraft({ ...draft, occurredOn: event.target.value })}
-                            />
-                        </label>
-
-                        <label className="mt-4 block text-sm font-black text-slate-700">
-                            Note <em className="font-normal not-italic text-slate-400">(optional)</em>
-                            <textarea
-                                className="mt-2 min-h-24 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                                maxLength={240}
-                                value={draft.note}
-                                onChange={(event) => setDraft({ ...draft, note: event.target.value })}
+                                value={selectedExpense.occurredOn}
+                                onChange={(event) => setSelectedExpense({ ...selectedExpense, occurredOn: event.target.value })}
                             />
                         </label>
 
                         <div className="mt-5 flex justify-end gap-2">
                             <button
                                 type="button"
-                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition hover:bg-slate-50"
-                                onClick={() => setDraft(null)}
+                                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                                onClick={() => {
+                                    setSelectedExpense(null)
+                                    setSelectedExpenseId("");
+                                }}
                             >
                                 Cancel
                             </button>
                             <button
-                                className="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-sky-200 transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-sky-200 transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                                 disabled={pending}
                             >
                                 {pending ? "Saving..." : "Save expense"}
@@ -361,15 +311,17 @@ export function TransactionManager({
                         </p>
                         <div className="mt-5 flex justify-end gap-2">
                             <button
-                                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                                className="rounded-xl border cursor-pointer border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition hover:bg-slate-200"
                                 onClick={() => setDeleteId(null)}
                             >
                                 Cancel
                             </button>
                             <button
-                                className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-xl cursor-pointer bg-rose-600 px-4 py-2.5 text-sm font-black text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                                 disabled={pending}
-                                onClick={destroy}
+                                onClick={() => {
+                                    deleteExpense.mutate({ id: selectedExpenseId })
+                                }}
                             >
                                 {pending ? "Deleting..." : "Delete expense"}
                             </button>

@@ -1,109 +1,108 @@
 generator client {
-  provider = "prisma-client-js"
+    provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+    provider = "postgresql"
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  budgets       Budget[]
-  expenses      Expense[]
+    id            String    @id
+    name          String
+    email         String    @unique
+    emailVerified Boolean   @default(false)
+    image         String?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    sessions      Session[]
+    accounts      Account[]
+    budgets       Budget[]
+    expenses      Expense[]
 
-  @@map("user")
+    @@map("user")
 }
 
 model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    id        String   @id
+    expiresAt DateTime
+    token     String   @unique
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    ipAddress String?
+    userAgent String?
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("session")
+    @@map("session")
 }
 
 model Account {
-  id                    String   @id
-  accountId             String
-  providerId            String
-  userId                String
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    id                    String    @id
+    accountId             String
+    providerId            String
+    userId                String
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
+    accessTokenExpiresAt  DateTime?
+    refreshTokenExpiresAt DateTime?
+    scope                 String?
+    password              String?
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @updatedAt
+    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([providerId, accountId])
-  @@map("account")
+    @@unique([providerId, accountId])
+    @@map("account")
 }
 
 model Verification {
-  id         String   @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+    id         String   @id
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
 
-  @@map("verification")
+    @@map("verification")
 }
 
 model Budget {
-  id         String         @id @default(cuid())
-  userId     String
-  monthStart DateTime
-  incomeCents Int
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fixedCosts FixedExpense[]
+    id          String         @id @default(cuid())
+    userId      String
+    monthStart  DateTime
+    incomeCents Int
+    createdAt   DateTime       @default(now())
+    updatedAt   DateTime       @updatedAt
+    user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+    fixedCosts  FixedExpense[]
 
-  @@unique([userId, monthStart])
-  @@index([userId, monthStart])
+    @@unique([userId, monthStart])
+    @@index([userId, monthStart])
 }
 
 model FixedExpense {
-  id          String   @id @default(cuid())
-  budgetId    String
-  name        String
-  amountCents Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+    id          String   @id @default(cuid())
+    budgetId    String
+    name        String
+    amountCents Int
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
 
-  @@index([budgetId])
+    @@index([budgetId])
 }
 
 model Expense {
-  id          String   @id @default(cuid())
-  userId      String
-  name        String
-  amountCents Int
-  category    String
-  occurredOn  DateTime
-  note        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    id          String   @id @default(cuid())
+    userId      String
+    name        String
+    amountCents Int
+    category    String
+    occurredOn  DateTime
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, occurredOn])
+    @@index([userId, occurredOn])
 }

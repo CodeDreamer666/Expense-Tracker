@@ -1,12 +1,19 @@
 import { AppShell } from "@/components/shared/AppShell";
-import { requireUser } from "@/lib/require-user";
+import { auth } from "@/server/better-auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireUser();
+    const session = await auth.api.getSession({
+        headers: await headers(),
+    });
 
-  return (
-    <AppShell user={user}>
-      {children}
-    </AppShell>
-  );
+    if (!session?.user) {
+        redirect("/login");
+    }
+    return (
+        <AppShell user={session.user}>
+            {children}
+        </AppShell>
+    );
 }
