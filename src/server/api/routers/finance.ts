@@ -71,7 +71,16 @@ export const financeRouter = createTRPCRouter({
                         name: cost.name,
                         amountCents: cost.amountCents,
                     })) ?? [],
-                expenses: expenses.map((expense) => ({
+                expenses: expenses.map((expense: {
+                    name: string;
+                    id: string;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    userId: string;
+                    amountCents: number;
+                    category: string;
+                    occurredOn: Date;
+                }) => ({
                     id: expense.id,
                     name: expense.name,
                     amountCents: expense.amountCents,
