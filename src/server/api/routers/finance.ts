@@ -44,7 +44,14 @@ export const financeRouter = createTRPCRouter({
                     ? {
                         id: budget.id,
                         incomeCents: budget.incomeCents,
-                        fixedCosts: budget.fixedCosts.map((cost) => ({
+                        fixedCosts: budget.fixedCosts.map((cost: {
+                            name: string;
+                            id: string;
+                            createdAt: Date;
+                            updatedAt: Date;
+                            amountCents: number;
+                            budgetId: string;
+                        }) => ({
                             id: cost.id,
                             name: cost.name,
                             amountCents: cost.amountCents,
