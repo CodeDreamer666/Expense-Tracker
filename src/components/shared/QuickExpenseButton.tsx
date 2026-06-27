@@ -8,6 +8,7 @@ import { api } from "@/trpc/react";
 import { useStatusMessage } from "@/components/shared/StatusMessageRouter"
 import handleTRPCError from "@/lib/handleTRPCError";
 
+
 export function QuickExpenseButton({ month }: { month: string }) {
     const { showMessage } = useStatusMessage();
     const router = useRouter();
@@ -34,7 +35,8 @@ export function QuickExpenseButton({ month }: { month: string }) {
             handleTRPCError({
                 error,
                 router,
-                pathname
+                pathname,
+                showMessage
             })
         },
 
