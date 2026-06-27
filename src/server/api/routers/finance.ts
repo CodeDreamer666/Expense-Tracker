@@ -98,11 +98,18 @@ export const financeRouter = createTRPCRouter({
 
                 if (input.fixedCosts.length) {
                     await tx.fixedExpense.createMany({
-                        data: input.fixedCosts.map((cost) => ({
-                            budgetId: budget.id,
-                            name: cost.name,
-                            amountCents: cost.amountCents,
-                        })),
+                        data: input.fixedCosts.map((cost) => {
+                            const cleanName = sanitizeHtml(cost.name, {
+                                allowedAttributes: {},
+                                allowedTags: []
+                            });
+
+                            return {
+                                budgetId: budget.id,
+                                name: cleanName,
+                                amountCents: cost.amountCents,
+                            }
+                        }),
                     });
                 }
 
