@@ -6,7 +6,6 @@ export const auth = betterAuth({
     database: prismaAdapter(db, {
         provider: "postgresql",
     }),
-
     socialProviders: {
         google: {
             prompt: "select_account",
